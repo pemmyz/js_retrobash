@@ -1,0 +1,13 @@
+body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #1e1e1e; /* Dark background for the page */
+}
+
+canvas {
+    border: 1px solid #ccc; /* Light border for the canvas */
+    background-color: #000; /* Black background drawn by JS, but can be fallback */
+}
