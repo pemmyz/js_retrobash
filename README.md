@@ -49,7 +49,7 @@ A fast-paced, arcade-style browser game with four paddles defending all edges of
 No server needed. Just open the HTML file!
 
 ```bash
-git clone https://github.com/your-username/4way-paddle-game.git
+git clone https://github.com/pemmyz/js_retrobash.git
 cd 4way-paddle-game
 open index.html  # or just double-click
 ```
