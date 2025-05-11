@@ -7,7 +7,8 @@
 
 A fast-paced, arcade-style browser game with four paddles defending all edges of the screen! Inspired by Pong, but now the ball can come from *any* direction.
 
-![Screenshot](screenshot.png)
+### Game
+![Game 1](screenshots/game_1.png)
 
 ## 🎮 Gameplay
 
