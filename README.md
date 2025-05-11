@@ -50,7 +50,7 @@ No server needed. Just open the HTML file!
 
 ```bash
 git clone https://github.com/pemmyz/js_retrobash.git
-cd 4way-paddle-game
+cd js_retrobash
 open index.html  # or just double-click
 ```
 ---
