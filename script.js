@@ -8,6 +8,7 @@ const RED = 'rgb(255, 0, 0)';
 const GREEN = 'rgb(0, 255, 0)';
 const BLUE = 'rgb(0, 0, 255)';
 const YELLOW = 'rgb(255, 255, 0)';
+const HELP_BG_COLOR = 'rgba(0, 0, 0, 0.8)'; // Semi-transparent for help
 
 const DEFAULT_BALL_SPEED = 3;
 const DEFAULT_PADDLE_SPEED = 6;
@@ -34,17 +35,25 @@ let paddles = [];
 let paddleBottom, paddleTop, paddleLeft, paddleRight;
 
 let globalStartTime;
-let score = 0; // Score is not updated in the original logic, but displayed
+let score = 0; 
 let gameOver = false;
-let autoFollowMode = false;
-let lastRandomOffsetTime = 0;
-let randomOffset = 0;
+let autoFollowMode = false; 
+let lastRandomOffsetTime = 0; 
+let randomOffset = 0;       
+let showHelp = false; // For help menu
 
-const keysPressed = {}; // To track continuous key presses
+const keysPressed = {}; 
+
+// --- HTML Elements for Buttons ---
+const addBallButton = document.getElementById('addBallButton');
+const launchBallButton = document.getElementById('launchBallButton');
+const resetGameButton = document.getElementById('resetGameButton');
+const toggleAutoButton = document.getElementById('toggleAutoButton');
+
 
 // --- Classes ---
 class Paddle {
-    constructor(x, y, width, height, color) {
+    constructor(x, y, width, height, color, isAI = false) {
         this.x = x;
         this.y = y;
         this.width = width;
@@ -52,17 +61,21 @@ class Paddle {
         this.color = color;
         this.speed = DEFAULT_PADDLE_SPEED;
         this.lives = 9;
+        this.isAI = isAI;
+        if (this.isAI) {
+            this.aiRandomOffset = 0;
+            this.lastAiRandomOffsetTime = 0;
+        }
     }
 
     move(dx, dy) {
         this.x += dx;
         this.y += dy;
 
-        // Keep paddle within screen bounds
-        if (this.width > this.height) { // Horizontal paddle
+        if (this.width > this.height) { 
             if (this.x < 0) this.x = 0;
             if (this.x + this.width > SCREEN_WIDTH) this.x = SCREEN_WIDTH - this.width;
-        } else { // Vertical paddle
+        } else { 
             if (this.y < 0) this.y = 0;
             if (this.y + this.height > SCREEN_HEIGHT) this.y = SCREEN_HEIGHT - this.height;
         }
@@ -73,167 +86,139 @@ class Paddle {
         ctx.fillRect(this.x, this.y, this.width, this.height);
     }
 
-    get rect() { // Mimics Pygame's rect for easier collision logic
+    get rect() { 
         return {
-            left: this.x,
-            right: this.x + this.width,
-            top: this.y,
-            bottom: this.y + this.height,
-            centerx: this.x + this.width / 2,
-            centery: this.y + this.height / 2,
-            width: this.width,
-            height: this.height
+            left: this.x, right: this.x + this.width, top: this.y, bottom: this.y + this.height,
+            centerx: this.x + this.width / 2, centery: this.y + this.height / 2,
+            width: this.width, height: this.height
         };
     }
 }
 
 class Ball {
     constructor(x, y, radius, color) {
-        this.x = x; // center x
-        this.y = y; // center y
-        this.radius = radius;
-        this.color = color;
+        this.x = x; this.y = y; this.radius = radius; this.color = color;
         this.dx = DEFAULT_BALL_SPEED * (Math.random() < 0.5 ? 1 : -1);
         this.dy = DEFAULT_BALL_SPEED * (Math.random() < 0.5 ? 1 : -1);
         this.speed = Math.sqrt(this.dx ** 2 + this.dy ** 2);
     }
-
-    move() {
-        this.x += this.dx;
-        this.y += this.dy;
-    }
-
+    move() { this.x += this.dx; this.y += this.dy; }
     draw(ctx) {
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = this.color; ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
     }
-    
-    resetPosition() { // Resets a single ball to center with new random direction
-        this.x = SCREEN_WIDTH / 2;
-        this.y = SCREEN_HEIGHT / 2;
+    resetPosition() { 
+        this.x = SCREEN_WIDTH / 2; this.y = SCREEN_HEIGHT / 2;
         this.dx = DEFAULT_BALL_SPEED * (Math.random() < 0.5 ? 1 : -1);
         this.dy = DEFAULT_BALL_SPEED * (Math.random() < 0.5 ? 1 : -1);
         this.speed = Math.sqrt(this.dx ** 2 + this.dy ** 2);
     }
-
-    get rect() { // Mimics Pygame's rect for a circular ball
+    get rect() { 
         return {
-            left: this.x - this.radius,
-            right: this.x + this.radius,
-            top: this.y - this.radius,
-            bottom: this.y + this.radius,
-            centerx: this.x,
-            centery: this.y,
-            width: this.radius * 2,
-            height: this.radius * 2
+            left: this.x - this.radius, right: this.x + this.radius,
+            top: this.y - this.radius, bottom: this.y + this.radius,
+            centerx: this.x, centery: this.y,
+            width: this.radius * 2, height: this.radius * 2
         };
     }
 }
 
-// --- Helper Functions ---
-function resetGame(numBalls = 1) {
+// --- Game Actions ---
+function performResetGame(numBalls = 1) {
     balls = [];
     for (let i = 0; i < numBalls; i++) {
         balls.push(new Ball(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, BALL_RADIUS, WHITE));
     }
-
     paddles.forEach(paddle => {
-        paddle.speed = DEFAULT_PADDLE_SPEED;
         paddle.lives = 9;
+        if (paddle.isAI) paddle.aiRandomOffset = 0;
     });
-    
-    // Reset paddle positions
-    paddleBottom.x = SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2;
-    paddleBottom.y = SCREEN_HEIGHT - 50;
-    paddleTop.x = SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2;
-    paddleTop.y = 40;
-    paddleLeft.x = 40;
-    paddleLeft.y = SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2;
-    paddleRight.x = SCREEN_WIDTH - 50; // Left edge of the right paddle
-    paddleRight.y = SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2;
-
+    paddleBottom.x = SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2; paddleBottom.y = SCREEN_HEIGHT - 50;
+    paddleTop.x = SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2; paddleTop.y = 40;
+    paddleLeft.x = 40; paddleLeft.y = SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2;
+    paddleRight.x = SCREEN_WIDTH - 50; paddleRight.y = SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2;
     gameOver = false;
-    // Python's global_start_time is not reset on 'N', so JS version matches this.
+    showHelp = false; // Close help on reset
 }
 
-function toggleAutoFollow() {
+function performToggleAutoFollow() {
     autoFollowMode = !autoFollowMode;
+    console.log("Auto-follow mode:", autoFollowMode);
 }
 
+function performLaunchBall() {
+    if (gameOver || showHelp) return;
+    balls.forEach(ball => {
+        ball.x = paddleBottom.rect.centerx;
+        ball.y = paddleBottom.y - ball.radius - 10; 
+        ball.dx = 0;
+        if (ball.speed === 0) ball.speed = DEFAULT_BALL_SPEED; 
+        ball.dy = -ball.speed;
+    });
+}
+
+function performAddBall() {
+    if (gameOver || showHelp) return;
+    const MAX_BALLS_VIA_BUTTON = 20;
+    if (balls.length < MAX_BALLS_VIA_BUTTON) {
+        balls.push(new Ball(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, BALL_RADIUS, WHITE));
+    } else {
+        console.log(`Max balls (${MAX_BALLS_VIA_BUTTON}) reached via button.`);
+    }
+}
+
+// --- Helper Functions ---
 function handleBallPaddleCollision(ball, paddle) {
     const paddleRect = paddle.rect;
-
-    if (paddle.width > paddle.height) { // Horizontal Paddles (Top/Bottom)
-        let relativeIntersectX = (ball.x - paddleRect.left) / paddleRect.width - 0.5;
-        relativeIntersectX = Math.max(-0.5, Math.min(0.5, relativeIntersectX)); // Clamp to [-0.5, 0.5]
-
-        const angleRange = 130; // degrees, as in Python
-
-        if (Math.abs(relativeIntersectX) < 0.05) { // Center hit zone
-            // Simple reflection of dy for near-center hits
-            ball.dy = -ball.dy; 
-        } else {
-            let bounceAngleDegrees = relativeIntersectX * angleRange; // Angle from vertical normal
-            let bounceAngleRadians = bounceAngleDegrees * (Math.PI / 180);
-
-            ball.dx = ball.speed * Math.sin(bounceAngleRadians);
-            if (paddle === paddleBottom) { // Ball hits bottom paddle, should go up
-                ball.dy = -ball.speed * Math.cos(bounceAngleRadians);
-            } else { // Ball hits top paddle, should go down
-                ball.dy = ball.speed * Math.cos(bounceAngleRadians);
-            }
+    if (paddle.width > paddle.height) { 
+        let relX = (ball.x - paddleRect.left) / paddleRect.width - 0.5;
+        relX = Math.max(-0.5, Math.min(0.5, relX)); 
+        const angleRange = 130; 
+        if (Math.abs(relX) < 0.05) { ball.dy = -ball.dy; } 
+        else {
+            let bounceAngleRad = (relX * angleRange) * (Math.PI / 180);
+            ball.dx = ball.speed * Math.sin(bounceAngleRad);
+            ball.dy = (paddle === paddleBottom ? -1 : 1) * ball.speed * Math.cos(bounceAngleRad);
         }
-    } else { // Vertical Paddles (Left/Right)
-        // Simple reflection of dx, as in Python
-        ball.dx = -ball.dx;
-        // Optional: Add slight change to dy based on hit position for more variety
-        // let relativeIntersectY = (ball.y - paddleRect.top) / paddleRect.height - 0.5;
-        // ball.dy += relativeIntersectY * (ball.speed * 0.2); 
-    }
-
-    // Ensure ball speed is conserved after angle calculations
+    } else { ball.dx = -ball.dx; }
     const currentSpeedSq = ball.dx ** 2 + ball.dy ** 2;
-    if (currentSpeedSq > 0) { // Avoid division by zero if speed is zero
-        const currentSpeedMagnitude = Math.sqrt(currentSpeedSq);
-        const factor = ball.speed / currentSpeedMagnitude;
-        ball.dx *= factor;
-        ball.dy *= factor;
+    if (currentSpeedSq > 0) { 
+        const factor = ball.speed / Math.sqrt(currentSpeedSq);
+        ball.dx *= factor; ball.dy *= factor;
     }
 }
 
-function checkCollision(obj1Rect, obj2Rect) { // Axis-Aligned Bounding Box collision
-    return obj1Rect.left < obj2Rect.right &&
-           obj1Rect.right > obj2Rect.left &&
-           obj1Rect.top < obj2Rect.bottom &&
-           obj1Rect.bottom > obj2Rect.top;
+function checkCollision(obj1Rect, obj2Rect) { 
+    return obj1Rect.left < obj2Rect.right && obj1Rect.right > obj2Rect.left &&
+           obj1Rect.top < obj2Rect.bottom && obj1Rect.bottom > obj2Rect.top;
 }
 
 // --- Input Handling ---
 window.addEventListener('keydown', (event) => {
-    keysPressed[event.key.toLowerCase()] = true; // Use toLowerCase for case-insensitivity
+    const key = event.key.toLowerCase();
+    keysPressed[key] = true;
 
-    // Handle single-press actions (not continuous)
-    if (event.key === ' ') { // Space bar: Launch ball from player paddle
-        balls.forEach(ball => {
-            ball.x = paddleBottom.rect.centerx;
-            ball.y = paddleBottom.y - ball.radius - 10; // Position above paddleBottom (paddleBottom.y is its top)
-            ball.dx = 0;
-            // Ensure ball shoots up with its current speed, or default if speed is 0
-            if (ball.speed === 0) ball.speed = DEFAULT_BALL_SPEED; 
-            ball.dy = -ball.speed;
-        });
+    if (key === 'h') {
+        showHelp = !showHelp;
+        event.preventDefault(); 
     }
-    if (event.key.toLowerCase() === 'n') { // 'N' key: Reset game
-        resetGame(balls.length > 0 ? balls.length : 1); // Keep current ball count or default to 1
+    if (key === 'n') { 
+        performResetGame(balls.length > 0 ? balls.length : 1); 
     }
-    if (event.key.toLowerCase() === 'a') { // 'A' key: Toggle auto-follow mode
-        toggleAutoFollow();
+    
+    if (showHelp && key !== 'h' && key !== 'n') return; 
+    if (gameOver && key !== 'n') return; 
+
+    if (key === ' ') { 
+        performLaunchBall();
+        event.preventDefault(); 
     }
-    const numKey = parseInt(event.key); // Number keys 1-5: Set number of balls and reset
+    if (key === 'a') { 
+        performToggleAutoFollow();
+    }
+    const numKey = parseInt(event.key); 
     if (!isNaN(numKey) && numKey >= 1 && numKey <= 5) {
-        resetGame(numKey);
+        performResetGame(numKey);
     }
 });
 
@@ -241,41 +226,90 @@ window.addEventListener('keyup', (event) => {
     keysPressed[event.key.toLowerCase()] = false;
 });
 
+// --- Button Event Listeners ---
+if (addBallButton) addBallButton.addEventListener('click', performAddBall);
+if (launchBallButton) launchBallButton.addEventListener('click', performLaunchBall);
+if (resetGameButton) resetGameButton.addEventListener('click', () => performResetGame(balls.length > 0 ? balls.length : 1));
+if (toggleAutoButton) toggleAutoButton.addEventListener('click', performToggleAutoFollow);
+
 // --- Game Initialization ---
 function initGameObjects() {
-    paddleBottom = new Paddle(SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2, SCREEN_HEIGHT - 50, PADDLE_WIDTH, PADDLE_HEIGHT, BLUE);
-    paddleTop = new Paddle(SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2, 40, PADDLE_WIDTH, PADDLE_HEIGHT, GREEN);
-    paddleLeft = new Paddle(40, SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2, PADDLE_VERTICAL_WIDTH, PADDLE_VERTICAL_HEIGHT, YELLOW);
-    paddleRight = new Paddle(SCREEN_WIDTH - 50, SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2, PADDLE_VERTICAL_WIDTH, PADDLE_VERTICAL_HEIGHT, RED);
-
+    paddleBottom = new Paddle(SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2, SCREEN_HEIGHT - 50, PADDLE_WIDTH, PADDLE_HEIGHT, BLUE, false);
+    paddleTop = new Paddle(SCREEN_WIDTH / 2 - PADDLE_WIDTH / 2, 40, PADDLE_WIDTH, PADDLE_HEIGHT, GREEN, true);
+    paddleLeft = new Paddle(40, SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2, PADDLE_VERTICAL_WIDTH, PADDLE_VERTICAL_HEIGHT, YELLOW, true); 
+    paddleRight = new Paddle(SCREEN_WIDTH - 50, SCREEN_HEIGHT / 2 - PADDLE_VERTICAL_HEIGHT / 2, PADDLE_VERTICAL_WIDTH, PADDLE_VERTICAL_HEIGHT, RED, true); 
     paddles = [paddleBottom, paddleTop, paddleLeft, paddleRight];
-    resetGame(1); // Start with 1 ball
-    globalStartTime = performance.now(); // Record game start time
+    performResetGame(1); 
+    globalStartTime = performance.now(); 
 }
 
 // --- Game Loop Functions ---
+function updateButtonStates() {
+    const canInteract = !gameOver && !showHelp;
+    if (addBallButton) addBallButton.disabled = !canInteract;
+    if (launchBallButton) launchBallButton.disabled = !canInteract;
+    if (resetGameButton) resetGameButton.disabled = false; 
+    if (toggleAutoButton) toggleAutoButton.disabled = showHelp; 
+}
+
 function update() {
-    if (gameOver) {
-        return; // Stop updates if game is over
+    updateButtonStates(); 
+
+    if (gameOver || showHelp) { 
+        return; 
     }
 
     const currentTime = performance.now();
 
-    // Update random offset for auto-follow mode periodically
-    if (currentTime - lastRandomOffsetTime > 2000) { // Every 2 seconds
-        randomOffset = Math.floor(Math.random() * 101) - 50; // Random value between -50 and 50
+    // Update random offset for player's auto-follow mode periodically
+    if (autoFollowMode && currentTime - lastRandomOffsetTime > 2000) {
+        randomOffset = Math.floor(Math.random() * 101) - 50; 
         lastRandomOffsetTime = currentTime;
     }
+    
+    // Update random offset for AI paddles periodically
+    paddles.forEach(paddle => {
+        if (paddle.isAI && currentTime - (paddle.lastAiRandomOffsetTime || 0) > 2000) {
+            paddle.aiRandomOffset = Math.floor(Math.random() * 81) - 40; 
+            paddle.lastAiRandomOffsetTime = currentTime;
+        }
+    });
 
     // Player paddle (paddleBottom) movement
     if (autoFollowMode) {
         if (balls.length > 0) {
-            const targetX = balls[0].x + randomOffset; // AI follows the first ball with an offset
-            if (targetX < paddleBottom.rect.centerx) {
-                paddleBottom.move(-paddleBottom.speed, 0);
+            let targetBall = null;
+            if (balls.length === 1) {
+                targetBall = balls[0];
+            } else {
+                // Find balls moving towards the player paddle (bottom)
+                const potentialTargets = balls.filter(b => b.dy > 0); // Positive dy means moving downwards
+
+                if (potentialTargets.length > 0) {
+                    // Target the closest ball among those moving towards the paddle
+                    targetBall = potentialTargets.reduce((closest, current) => {
+                        const distToCurrent = Math.hypot(current.x - paddleBottom.rect.centerx, current.y - paddleBottom.rect.centery);
+                        const distToClosest = Math.hypot(closest.x - paddleBottom.rect.centerx, closest.y - paddleBottom.rect.centery);
+                        return distToCurrent < distToClosest ? current : closest;
+                    });
+                } else {
+                    // If no balls are moving towards paddle, target the overall closest ball
+                    targetBall = balls.reduce((closest, current) => {
+                        const distToCurrent = Math.hypot(current.x - paddleBottom.rect.centerx, current.y - paddleBottom.rect.centery);
+                        const distToClosest = Math.hypot(closest.x - paddleBottom.rect.centerx, closest.y - paddleBottom.rect.centery);
+                        return distToCurrent < distToClosest ? current : closest;
+                    });
+                }
             }
-            if (targetX > paddleBottom.rect.centerx) {
-                paddleBottom.move(paddleBottom.speed, 0);
+
+            if (targetBall) {
+                const targetX = targetBall.x + randomOffset; // Apply player's random offset
+                if (targetX < paddleBottom.rect.centerx) {
+                    paddleBottom.move(-paddleBottom.speed, 0);
+                }
+                if (targetX > paddleBottom.rect.centerx) {
+                    paddleBottom.move(paddleBottom.speed, 0);
+                }
             }
         }
     } else { // Manual control
@@ -289,168 +323,216 @@ function update() {
 
     // AI Paddles (top, left, right) movement
     if (balls.length > 0) {
-        const mainBall = balls[0]; // AI follows the first ball
-
         [paddleTop, paddleLeft, paddleRight].forEach(paddle => {
-            if (paddle === paddleTop) { // Horizontal AI paddle (top)
-                if (mainBall.x < paddle.rect.centerx) paddle.move(-paddle.speed, 0);
-                if (mainBall.x > paddle.rect.centerx) paddle.move(paddle.speed, 0);
-            } else { // Vertical AI paddles (left, right)
-                if (mainBall.y < paddle.rect.centery) paddle.move(0, -paddle.speed);
-                if (mainBall.y > paddle.rect.centery) paddle.move(0, paddle.speed);
+            let targetBall = null;
+            if (balls.length === 1) { targetBall = balls[0]; } 
+            else {
+                let potentialTargets = [];
+                if (paddle === paddleTop) potentialTargets = balls.filter(b => b.dy < 0); // Moving towards top
+                else if (paddle === paddleLeft) potentialTargets = balls.filter(b => b.dx < 0); // Moving towards left
+                else if (paddle === paddleRight) potentialTargets = balls.filter(b => b.dx > 0); // Moving towards right
+
+                if (potentialTargets.length > 0) {
+                    targetBall = potentialTargets.reduce((closest, current) => {
+                        const distC = Math.hypot(current.x - paddle.rect.centerx, current.y - paddle.rect.centery);
+                        const distP = Math.hypot(closest.x - paddle.rect.centerx, closest.y - paddle.rect.centery);
+                        return distC < distP ? current : closest;
+                    });
+                } else {
+                     targetBall = balls.reduce((closest, current) => {
+                        const distC = Math.hypot(current.x - paddle.rect.centerx, current.y - paddle.rect.centery);
+                        const distP = Math.hypot(closest.x - paddle.rect.centerx, closest.y - paddle.rect.centery);
+                        return distC < distP ? current : closest;
+                    });
+                }
+            }
+            if (targetBall) {
+                let targetPos;
+                if (paddle === paddleTop) { 
+                    targetPos = targetBall.x + (paddle.aiRandomOffset || 0);
+                    if (targetPos < paddle.rect.centerx) paddle.move(-paddle.speed, 0);
+                    if (targetPos > paddle.rect.centerx) paddle.move(paddle.speed, 0);
+                } else { 
+                    targetPos = targetBall.y + (paddle.aiRandomOffset || 0);
+                    if (targetPos < paddle.rect.centery) paddle.move(0, -paddle.speed);
+                    if (targetPos > paddle.rect.centery) paddle.move(0, paddle.speed);
+                }
             }
         });
     }
     
-    // Ball speed control with ArrowUp/ArrowDown
+    // Ball speed control
     let ballSpeedChanged = false;
     if (keysPressed['arrowup']) {
-        balls.forEach(ball => ball.speed += 0.1);
+        balls.forEach(ball => ball.speed = Math.min(ball.speed + 0.1, 20)); // Max speed cap
         ballSpeedChanged = true;
     }
     if (keysPressed['arrowdown']) {
-        balls.forEach(ball => {
-            if (ball.speed > 0.2) ball.speed -= 0.1; else ball.speed = 0.1; // Min speed 0.1
-        });
+        balls.forEach(ball => ball.speed = Math.max(0.1, ball.speed - 0.1));
         ballSpeedChanged = true;
     }
 
     if (ballSpeedChanged && balls.length > 0) {
-        balls.forEach(ball => { // Rescale dx, dy if speed changed
+        balls.forEach(ball => { 
             const angle = Math.atan2(ball.dy, ball.dx);
-            if (ball.dx === 0 && ball.dy === 0 && ball.speed > 0) { // If ball was stationary
-                ball.dy = -ball.speed; // Default new direction (upwards)
-                ball.dx = 0;
-            } else if (ball.speed === 0) { // If speed becomes 0
-                 ball.dx = 0; ball.dy = 0;
-            }else {
+            if (ball.dx === 0 && ball.dy === 0 && ball.speed > 0) { 
+                ball.dy = -ball.speed; ball.dx = 0;
+            } else if (ball.speed === 0) { ball.dx = 0; ball.dy = 0; }
+            else {
                 ball.dx = ball.speed * Math.cos(angle);
                 ball.dy = ball.speed * Math.sin(angle);
             }
         });
     }
     
-    // Update all paddle speeds based on the (first) ball's speed
+    // Update paddle speeds based on ball speed
     if (balls.length > 0) {
-        const baseSpeed = Math.max(0.1, balls[0].speed); // Ensure baseSpeed is not zero for ratio calc
+        const baseSpeed = Math.max(0.1, balls[0].speed); 
         paddles.forEach(paddle => {
             paddle.speed = PADDLE_SPEED_RATIO * baseSpeed;
-            if (paddle.speed < 1) paddle.speed = 1; // Minimum paddle speed
+            if (paddle.speed < 1) paddle.speed = 1; 
         });
     }
 
-
     // Ball movement and collisions
-    const ballsToRemoveIndices = []; // Store indices of balls to remove
+    const ballsToRemoveIndices = []; 
     balls.forEach((ball, index) => {
         ball.move();
-        const ballR = ball.rect; // shorthand for ball.rect
+        const ballR = ball.rect; 
 
         // Ball-Paddle collisions
         paddles.forEach(paddle => {
             const paddleR = paddle.rect;
-            if (checkCollision(ballR, paddleR)) { // General collision check first
-                // Specific directional checks and position adjustment
+            if (checkCollision(ballR, paddleR)) { 
                 if (paddle === paddleBottom && ball.dy > 0 && ballR.bottom >= paddleR.top && ballR.top < paddleR.bottom) {
-                    ball.y = paddleR.top - ball.radius; // Adjust position to prevent sticking
-                    handleBallPaddleCollision(ball, paddle);
+                    ball.y = paddleR.top - ball.radius; handleBallPaddleCollision(ball, paddle);
                 } else if (paddle === paddleTop && ball.dy < 0 && ballR.top <= paddleR.bottom && ballR.bottom > paddleR.top) {
-                    ball.y = paddleR.bottom + ball.radius;
-                    handleBallPaddleCollision(ball, paddle);
+                    ball.y = paddleR.bottom + ball.radius; handleBallPaddleCollision(ball, paddle);
                 } else if (paddle === paddleLeft && ball.dx < 0 && ballR.left <= paddleR.right && ballR.right > paddleR.left) {
-                    ball.x = paddleR.right + ball.radius;
-                    handleBallPaddleCollision(ball, paddle);
+                    ball.x = paddleR.right + ball.radius; handleBallPaddleCollision(ball, paddle);
                 } else if (paddle === paddleRight && ball.dx > 0 && ballR.right >= paddleR.left && ballR.left < paddleR.right) {
-                    ball.x = paddleR.left - ball.radius;
-                    handleBallPaddleCollision(ball, paddle);
+                    ball.x = paddleR.left - ball.radius; handleBallPaddleCollision(ball, paddle);
                 }
             }
         });
 
-        // Ball-Wall collisions (loss of life for corresponding paddle)
+        // Ball-Wall collisions (loss of life)
         let scoredAgainstPaddle = false;
-        if (ballR.bottom >= SCREEN_HEIGHT) { // Hits bottom wall
-            paddleBottom.lives--; scoredAgainstPaddle = true;
-        } else if (ballR.top <= 0) { // Hits top wall
-            paddleTop.lives--; scoredAgainstPaddle = true;
-        } else if (ballR.left <= 0) { // Hits left wall
-            paddleLeft.lives--; scoredAgainstPaddle = true;
-        } else if (ballR.right >= SCREEN_WIDTH) { // Hits right wall
-            paddleRight.lives--; scoredAgainstPaddle = true;
-        }
+        if (ballR.bottom >= SCREEN_HEIGHT) { paddleBottom.lives--; scoredAgainstPaddle = true; } 
+        else if (ballR.top <= 0) { paddleTop.lives--; scoredAgainstPaddle = true; } 
+        else if (ballR.left <= 0) { paddleLeft.lives--; scoredAgainstPaddle = true; } 
+        else if (ballR.right >= SCREEN_WIDTH) { paddleRight.lives--; scoredAgainstPaddle = true; }
 
         if (scoredAgainstPaddle) {
-            ballsToRemoveIndices.push(index); // Mark ball for removal
-            if (paddles.some(p => p.lives <= 0)) { // Check if any paddle has lost all lives
-                gameOver = true;
-            }
+            ballsToRemoveIndices.push(index); 
+            if (paddles.some(p => p.lives <= 0)) { gameOver = true; }
         }
     });
 
-    // Remove balls that went out (iterate backwards to avoid index issues)
+    // Remove balls that went out and replace them if game not over
     for (let i = ballsToRemoveIndices.length - 1; i >= 0; i--) {
         balls.splice(ballsToRemoveIndices[i], 1);
-        if (!gameOver) { // If game is not over, replace the lost ball
+        if (!gameOver) { 
             balls.push(new Ball(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, BALL_RADIUS, WHITE));
         }
     }
-    // If all balls are gone for some reason and game is not over, add one.
-    // This case should typically be handled by the replacement logic above.
+    // Ensure at least one ball if game not over
     if (balls.length === 0 && !gameOver) {
         balls.push(new Ball(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, BALL_RADIUS, WHITE));
     }
 }
 
+function drawHelpMenu() {
+    ctx.fillStyle = HELP_BG_COLOR;
+    ctx.fillRect(50, 50, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 100);
+
+    ctx.fillStyle = WHITE;
+    ctx.font = `bold 24px ${FONT_FAMILY}`;
+    ctx.textAlign = 'center';
+    ctx.fillText("HELP MENU", SCREEN_WIDTH / 2, 80);
+
+    ctx.font = `16px ${FONT_FAMILY}`;
+    ctx.textAlign = 'left';
+    const helpText = [
+        "CONTROLS:",
+        "------------------------------------",
+        "Arrow Left/Right: Move your paddle (bottom)",
+        "Space Bar / Launch Ball Button: Launch ball from your paddle",
+        "Up/Down Arrows: Increase/Decrease ball speed",
+        "",
+        "A / Toggle Auto Button: Toggle auto-follow for your paddle",
+        "N / Reset Game Button: Reset the current game",
+        "1-5 Keys: Reset game with 1 to 5 balls",
+        "Add Ball Button: Add a new ball to the center",
+        "",
+        "H: Toggle this Help Menu",
+        "------------------------------------",
+        "Goal: Don't let the ball pass your paddle!",
+        "Each paddle has 9 lives.",
+    ];
+
+    let yPos = 130;
+    helpText.forEach(line => {
+        ctx.fillText(line, 70, yPos);
+        yPos += 22;
+    });
+    ctx.textAlign = 'start'; // Reset alignment
+}
+
 function draw() {
-    // Clear screen
     ctx.fillStyle = BLACK;
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    // Draw paddles
     paddles.forEach(paddle => paddle.draw(ctx));
-
-    // Draw balls
     balls.forEach(ball => ball.draw(ctx));
 
-    // Draw UI Text
     ctx.fillStyle = WHITE;
-    ctx.textBaseline = 'top'; // Align text from top-left for easier positioning
-
-    const smallFontSize = Math.floor(FONT_SIZE * 0.65); // Smaller font for info text
+    ctx.textBaseline = 'top'; 
+    const smallFontSize = Math.floor(FONT_SIZE * 0.65); 
     ctx.font = `${smallFontSize}px ${FONT_FAMILY}`;
 
     if (gameOver) {
-        ctx.font = `${FONT_SIZE}px ${FONT_FAMILY}`; // Larger font for Game Over message
-        const gameOverText = "Game Over! Press 'N' to restart.";
-        const textMetrics = ctx.measureText(gameOverText);
-        ctx.fillText(gameOverText, (SCREEN_WIDTH - textMetrics.width) / 2, SCREEN_HEIGHT / 2 - FONT_SIZE / 2);
+        ctx.font = `${FONT_SIZE}px ${FONT_FAMILY}`; 
+        ctx.textAlign = 'center';
+        const gameOverText = "Game Over! Press 'N' or Reset Button to restart.";
+        ctx.fillText(gameOverText, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - FONT_SIZE / 2);
+        ctx.textAlign = 'start'; // Reset
     }
 
-    // Display Playtime
     const globalElapsedTime = (performance.now() - globalStartTime) / 1000;
     ctx.fillText(`Playtime: ${globalElapsedTime.toFixed(1)} s`, 10, smallFontSize * 2.5 + 10); 
 
-    // Display Speed (of the first ball, if any)
     if (balls.length > 0) {
         ctx.fillText(`Speed: ${balls[0].speed.toFixed(1)}`, 10, 10);
     } else {
         ctx.fillText(`Speed: N/A`, 10, 10);
     }
-    // Display Score
     ctx.fillText(`Score: ${score}`, 10, smallFontSize + 15);
 
-    // Display Lives
     const livesText = `Lives - B:${paddleBottom.lives} T:${paddleTop.lives} L:${paddleLeft.lives} R:${paddleRight.lives}`;
-    const livesTextMetrics = ctx.measureText(livesText);
-    ctx.fillText(livesText, (SCREEN_WIDTH - livesTextMetrics.width) / 2, 10);
+    const livesTextMetrics = ctx.measureText(livesText); // For centering if needed, but not strictly necessary for how it's used here
+    ctx.textAlign = 'center';
+    ctx.fillText(livesText, SCREEN_WIDTH / 2, 10);
+    ctx.textAlign = 'start'; // Reset
+
+    // Always draw "Press H for Help"
+    ctx.font = `14px ${FONT_FAMILY}`;
+    ctx.fillStyle = WHITE;
+    ctx.textAlign = 'right';
+    ctx.fillText("Press H for Help", SCREEN_WIDTH - 10, SCREEN_HEIGHT - 25);
+    ctx.textAlign = 'start'; // Reset
+
+    if (showHelp) {
+        drawHelpMenu();
+    }
 }
 
 function gameLoop() {
-    update(); // Update game state
-    draw();   // Render game
-    requestAnimationFrame(gameLoop); // Request next frame for smooth animation
+    update(); 
+    draw();   
+    requestAnimationFrame(gameLoop); 
 }
 
 // --- Start Game ---
-initGameObjects(); // Initialize all game entities
-gameLoop();        // Start the main game loop
+initGameObjects(); 
+gameLoop();

@@ -1,13 +1,47 @@
 body {
     margin: 0;
     display: flex;
+    flex-direction: column; /* To stack canvas and controls */
     justify-content: center;
     align-items: center;
     height: 100vh;
     background-color: #1e1e1e; /* Dark background for the page */
+    font-family: Arial, sans-serif; /* Consistent font */
 }
 
 canvas {
     border: 1px solid #ccc; /* Light border for the canvas */
     background-color: #000; /* Black background drawn by JS, but can be fallback */
+}
+
+#controls { /* Style for the controls container */
+    margin-top: 15px;
+    display: flex; /* Arrange buttons in a row */
+    flex-wrap: wrap; /* Allow buttons to wrap if space is limited */
+    justify-content: center;
+}
+
+#controls button { /* Style for buttons within the controls container */
+    padding: 8px 15px;
+    font-size: 14px;
+    background-color: #007bff; /* A pleasant blue */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin: 5px; /* Spacing around buttons */
+    transition: background-color 0.2s ease-in-out;
+}
+
+#controls button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+}
+#controls button:active {
+    background-color: #004085; /* Even darker when clicked */
+}
+
+#controls button:disabled { /* Style for disabled buttons */
+    background-color: #555;
+    color: #aaa;
+    cursor: not-allowed;
 }
