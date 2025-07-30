@@ -399,34 +399,71 @@ function drawHelpMenu() {
 
     ctx.font = `16px ${FONT_FAMILY}`;
     ctx.textAlign = 'left';
-    const helpText = [
+
+    let yPos = 130;
+    const xStart = 70;
+    const xIndent = 90;
+
+    // Draw non-colored intro text
+    const introText = [
         "Press a paddle's key to take control from the AI.",
         "A white square indicates a human-controlled paddle.",
         "----------------------------------------------------------------",
-        "PLAYER CONTROLS:",
-        "• Top Paddle (Green):   'A' (left) and 'D' (right)",
-        "• Bottom Paddle (Blue): Left and Right Arrow keys",
-        "• Left Paddle (Yellow):  'H' (up) and 'K' (down)",
-        "• Right Paddle (Red):   Numpad 4 (up) and Numpad 6 (down)",
-        "",
+    ];
+    introText.forEach(line => {
+        ctx.fillText(line, xStart, yPos);
+        yPos += 22;
+    });
+    
+    yPos += 5;
+    ctx.fillText("PLAYER CONTROLS:", xStart, yPos);
+    yPos += 25;
+
+    // --- Color-Coded Player Controls ---
+    const controlLines = [
+        { label: '• Top Paddle:   ', color: GREEN, controls: "'A' (left) and 'D' (right)" },
+        { label: '• Bottom Paddle: ', color: BLUE, controls: "Left and Right Arrow keys" },
+        { label: '• Left Paddle:  ', color: YELLOW, controls: "'H' (up) and 'K' (down)" },
+        { label: '• Right Paddle: ', color: RED, controls: "Numpad 4 (up) and Numpad 6 (down)" }
+    ];
+
+    ctx.font = `bold 16px ${FONT_FAMILY}`; // Make controls stand out
+    controlLines.forEach(line => {
+        let currentX = xIndent;
+        // Draw the colored part
+        ctx.fillStyle = line.color;
+        ctx.fillText(line.label, currentX, yPos);
+
+        // Measure it and draw the white part right after
+        currentX += ctx.measureText(line.label).width;
+        ctx.fillStyle = WHITE;
+        ctx.fillText(line.controls, currentX, yPos);
+        
+        yPos += 22;
+    });
+    ctx.font = `16px ${FONT_FAMILY}`; // Reset font style
+    yPos += 5;
+
+    // --- General Controls ---
+    const generalText = [
+        "----------------------------------------------------------------",
         "GENERAL CONTROLS:",
         "• Space Bar:          Launch ball from bottom paddle",
         "• Up/Down Arrows:     Increase/Decrease ball speed",
         "• N / Reset Button:   Reset game (all paddles become AI)",
         "• 1-5 Keys:           Reset game with 1 to 5 balls",
-        "• Add Ball Button:    Add a new ball to the center",
         "• F1:                 Toggle this Help Menu",
         "----------------------------------------------------------------",
         "GOAL: Be the last paddle with lives remaining!",
     ];
-
-    let yPos = 130;
-    helpText.forEach(line => {
-        ctx.fillText(line, 70, yPos);
+    generalText.forEach(line => {
+        ctx.fillText(line, xStart, yPos);
         yPos += 22;
     });
+
     ctx.textAlign = 'start'; // Reset alignment
 }
+
 
 function draw() {
     ctx.fillStyle = BLACK;
