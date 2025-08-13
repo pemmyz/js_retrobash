@@ -41,6 +41,10 @@ let showHelp = false;
 
 const keysPressed = {}; // Using event.code for reliability
 
+// --- UI Interaction State ---
+let helpClickArea = {};
+let isHoveringHelp = false;
+
 // --- HTML Elements for Buttons ---
 const addBallButton = document.getElementById('addBallButton');
 const launchBallButton = document.getElementById('launchBallButton');
@@ -237,6 +241,38 @@ window.addEventListener('keyup', (event) => {
     keysPressed[event.code] = false;
 });
 
+// --- Mouse Listeners for Clickable Help Text ---
+canvas.addEventListener('click', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Check if the click is within the help text area
+    if (helpClickArea.left && // ensure area is defined
+        mouseX >= helpClickArea.left && mouseX <= helpClickArea.right &&
+        mouseY >= helpClickArea.top && mouseY <= helpClickArea.bottom) {
+        showHelp = !showHelp;
+    }
+});
+
+canvas.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Check if mouse is over the help text area
+    if (helpClickArea.left && // ensure area is defined
+        mouseX >= helpClickArea.left && mouseX <= helpClickArea.right &&
+        mouseY >= helpClickArea.top && mouseY <= helpClickArea.bottom) {
+        isHoveringHelp = true;
+        canvas.style.cursor = 'pointer';
+    } else {
+        isHoveringHelp = false;
+        canvas.style.cursor = 'default';
+    }
+});
+
+
 // --- Button Event Listeners ---
 if (addBallButton) addBallButton.addEventListener('click', performAddBall);
 if (launchBallButton) launchBallButton.addEventListener('click', performLaunchBall);
@@ -397,25 +433,41 @@ function drawHelpMenu() {
     ctx.textAlign = 'center';
     ctx.fillText("HELP & CONTROLS", SCREEN_WIDTH / 2, 90);
 
-    ctx.font = `16px ${FONT_FAMILY}`;
     ctx.textAlign = 'left';
 
     let yPos = 130;
     const xStart = 70;
     const xIndent = 90;
 
-    // Draw non-colored intro text
+    // --- ABOUT Section ---
+    ctx.font = `bold 18px ${FONT_FAMILY}`;
+    ctx.fillText("ABOUT", xStart, yPos);
+    yPos += 25;
+
+    ctx.font = `italic 16px ${FONT_FAMILY}`;
+    const aboutLines = [
+        "A fast-paced, arcade-style browser game with four paddles defending all edges",
+        "of the screen! Inspired by Pong, but now the ball can come from any direction."
+    ];
+    aboutLines.forEach(line => {
+        ctx.fillText(line, xStart, yPos);
+        yPos += 22;
+    });
+    yPos += 10;
+    ctx.font = `16px ${FONT_FAMILY}`; // Reset font style
+
+    // --- Intro text ---
     const introText = [
-        "Press a paddle's key to take control from the AI.",
-        "A white square indicates a human-controlled paddle.",
         "----------------------------------------------------------------",
+        "Press a paddle's key to take control from the AI.",
+        "A white square indicates a human-controlled paddle."
     ];
     introText.forEach(line => {
         ctx.fillText(line, xStart, yPos);
         yPos += 22;
     });
-    
     yPos += 5;
+
     ctx.fillText("PLAYER CONTROLS:", xStart, yPos);
     yPos += 25;
 
@@ -452,7 +504,7 @@ function drawHelpMenu() {
         "• Up/Down Arrows:     Increase/Decrease ball speed",
         "• N / Reset Button:   Reset game (all paddles become AI)",
         "• 1-5 Keys:           Reset game with 1 to 5 balls",
-        "• F1:                 Toggle this Help Menu",
+        "• F1 / Click Text:    Toggle this Help Menu",
         "----------------------------------------------------------------",
         "GOAL: Be the last paddle with lives remaining!",
     ];
@@ -497,11 +549,33 @@ function draw() {
     ctx.fillText(livesText, SCREEN_WIDTH / 2, 10);
     ctx.textAlign = 'start';
 
-    ctx.font = `14px ${FONT_FAMILY}`;
-    ctx.fillStyle = WHITE;
+    // Draw and handle clickable help text
+    const helpText = "Press F1 for Help";
+    const helpTextY = SCREEN_HEIGHT - 25; // Y-position for the top of text
+    const helpTextX = SCREEN_WIDTH - 10;   // X-position for the right edge
+    const helpTextFontSize = 14;
+    ctx.font = `${helpTextFontSize}px ${FONT_FAMILY}`;
+    const helpTextMetrics = ctx.measureText(helpText);
+
+    // Define the click area with padding.
+    helpClickArea = {
+        left: helpTextX - helpTextMetrics.width - 5,
+        right: helpTextX + 5,
+        top: helpTextY - 5,
+        bottom: helpTextY + helpTextFontSize + 5
+    };
+
+    // Set style based on hover state
+    ctx.fillStyle = isHoveringHelp ? YELLOW : WHITE; // Yellow for hover
     ctx.textAlign = 'right';
-    ctx.fillText("Press F1 for Help", SCREEN_WIDTH - 10, SCREEN_HEIGHT - 25);
-    ctx.textAlign = 'start';
+    ctx.fillText(helpText, helpTextX, helpTextY);
+
+    // Draw underline on hover
+    if (isHoveringHelp) {
+        ctx.fillRect(helpTextX - helpTextMetrics.width, helpTextY + helpTextFontSize + 1, helpTextMetrics.width, 1);
+    }
+    
+    ctx.textAlign = 'start'; // Reset alignment
 
     if (showHelp) {
         drawHelpMenu();
